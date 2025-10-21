@@ -1,9 +1,9 @@
 // sw.js — core offline app shell
-const CACHE = 'arch-spiral-core-v1';
+const CACHE = 'arch-spiral-core-v2';
 const ASSETS = [
   './',
   './index.html',
-  './app.js',
+  './app.v2.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png'
