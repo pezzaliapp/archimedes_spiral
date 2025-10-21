@@ -114,6 +114,32 @@
         </label>
       </div>
     
+    
+      <div class="row">
+        <label>Qualità
+          <select id="quality">
+            <option value="low">Bassa</option>
+            <option value="med" selected>Media</option>
+            <option value="high">Alta</option>
+          </select>
+        </label>
+        <label>Gradiente colore
+          <select id="gradientMode">
+            <option value="none" selected>Nessuno</option>
+            <option value="depth">Profondità</option>
+            <option value="radius">Distanza dal centro</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" id="autoDemo">
+          Demo automatica (screensaver)
+        </label>
+        <div></div>
+        <button id="btnRecordWebM" class="ghost">Rec WebM</button>
+        <button id="btnStopRecord" class="ghost" disabled>Stop</button>
+        <button id="btnFramesZip" class="ghost">PNG frames (zip)</button>
+      </div>
+
     </section>
 
     <section class="stage card">

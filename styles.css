@@ -43,3 +43,5 @@ footer{padding:12px; text-align:center; color:var(--muted); border-top:1px solid
 @media (min-width: 901px){
   .controls .row{grid-template-columns: repeat(6, minmax(130px,1fr))}
 }
+
+/* Added quality, gradient, recording controls */
