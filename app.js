@@ -1,4 +1,8 @@
-// Archimedes Spiral — PWA app.js (2D/3D + Animation)
+// Archimedes Spiral — PWA (GitHub Pages Optimized)
+// - Precompute points (2D/3D) on param changes
+// - Adaptive sampling (<= 20k points)
+// - Time-based animation
+// - Skip heavy scanlines while animating
 (function(){
   'use strict';
 
@@ -16,9 +20,12 @@
     btnInstall.style.display = 'none';
   });
 
-  // --- SW ---
+  // --- SW (robust path for GH Pages subfolder) ---
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js');
+    try{
+      const swPath = (location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/[^/]+$/,'')) + 'sw.js';
+      navigator.serviceWorker.register(swPath);
+    }catch(e){}
   }
 
   const $ = (s) => document.querySelector(s);
@@ -49,23 +56,63 @@
   };
 
   // Sync helpers
-  function linkRangeNumber(range, number){
-    function syncToNum(){ number.value = range.value; draw(); }
-    function syncToRange(){ range.value = number.value; draw(); }
+  function linkRangeNumber(range, number, onChange){
+    function syncToNum(){ number.value = range.value; onChange?.(); }
+    function syncToRange(){ range.value = number.value; onChange?.(); }
     range?.addEventListener('input', syncToNum);
     number?.addEventListener('input', syncToRange);
   }
-  linkRangeNumber(ctrl.a, ctrl.aNum);
-  linkRangeNumber(ctrl.b, ctrl.bNum);
-  linkRangeNumber(ctrl.turns, ctrl.turnsNum);
-  linkRangeNumber(ctrl.tStep, ctrl.tStepNum);
-  linkRangeNumber(ctrl.scale, ctrl.scaleNum);
-  linkRangeNumber(ctrl.rot, ctrl.rotNum);
-  linkRangeNumber(ctrl.zPerTurn, ctrl.zPerTurnNum);
-  linkRangeNumber(ctrl.fov, ctrl.fovNum);
-  linkRangeNumber(ctrl.rxSpeed, ctrl.rxSpeedNum);
-  linkRangeNumber(ctrl.rySpeed, ctrl.rySpeedNum);
-  linkRangeNumber(ctrl.rzSpeed, ctrl.rzSpeedNum);
+
+  // Geometry cache
+  let pts2D = [];   // base (x,y) before canvas transforms
+  let pts3D = [];   // base (x,y,z) object space
+  const MAX_POINTS = 20000;
+
+  function computeGeometry(){
+    const a = parseFloat(ctrl.a.value);
+    const b = parseFloat(ctrl.b.value);
+    const turns = parseInt(ctrl.turns.value, 10);
+    const tStep = parseFloat(ctrl.tStep.value);
+    const tMax = turns * Math.PI * 2;
+    const effStep = Math.max(tStep, tMax / MAX_POINTS);
+
+    // 2D
+    const p2 = [];
+    for(let t=0; t<=tMax; t+=effStep){
+      const r = a + b * t;
+      p2.push({x: r*Math.cos(t), y: -r*Math.sin(t)});
+    }
+    pts2D = p2;
+
+    // 3D (uses zPerTurn)
+    const zPerTurn = parseFloat(ctrl.zPerTurn?.value || 120);
+    const p3 = [];
+    for(let t=0; t<=tMax; t+=effStep){
+      const r = a + b * t;
+      const x = r*Math.cos(t);
+      const y = -r*Math.sin(t);
+      const z = (zPerTurn * t) / (Math.PI*2);
+      p3.push({x, y, z});
+    }
+    pts3D = p3;
+  }
+
+  // Recompute on parameter changes that affect geometry
+  function markDirty(){ computeGeometry(); draw(); }
+
+  linkRangeNumber(ctrl.a, ctrl.aNum, markDirty);
+  linkRangeNumber(ctrl.b, ctrl.bNum, markDirty);
+  linkRangeNumber(ctrl.turns, ctrl.turnsNum, markDirty);
+  linkRangeNumber(ctrl.tStep, ctrl.tStepNum, markDirty);
+  linkRangeNumber(ctrl.zPerTurn, ctrl.zPerTurnNum, markDirty);
+
+  // Other controls just redraw
+  linkRangeNumber(ctrl.scale, ctrl.scaleNum, draw);
+  linkRangeNumber(ctrl.rot, ctrl.rotNum, draw);
+  linkRangeNumber(ctrl.fov, ctrl.fovNum, draw);
+  linkRangeNumber(ctrl.rxSpeed, ctrl.rxSpeedNum, draw);
+  linkRangeNumber(ctrl.rySpeed, ctrl.rySpeedNum, draw);
+  linkRangeNumber(ctrl.rzSpeed, ctrl.rzSpeedNum, draw);
 
   ['lineColor','lineW','asPoints','scanlines','mode3d'].forEach(id=>{
     ctrl[id]?.addEventListener('input', draw);
@@ -88,7 +135,7 @@
     ctrl.rxSpeed.value = ctrl.rxSpeedNum.value = 0;
     ctrl.rySpeed.value = ctrl.rySpeedNum.value = 18;
     ctrl.rzSpeed.value = ctrl.rzSpeedNum.value = 0;
-    draw();
+    computeGeometry(); draw();
   });
 
   // Resize
@@ -128,38 +175,33 @@
 
   // Drawing
   function draw2D(w, h){
-    const a = parseFloat(ctrl.a.value);
-    const b = parseFloat(ctrl.b.value);
-    const turns = parseInt(ctrl.turns.value, 10);
-    const tStep = parseFloat(ctrl.tStep.value);
     const scale = parseFloat(ctrl.scale.value);
-    const rotDeg = parseFloat(ctrl.rot.value);
-    const tMax = turns * Math.PI * 2;
-    const rot = rotDeg * Math.PI / 180;
+    const rot = parseFloat(ctrl.rot.value) * Math.PI/180;
+    const color = ctrl.lineColor.value;
+    const lw = parseInt(ctrl.lineW.value, 10);
 
     ctx.save();
     ctx.translate(w/2, h/2);
     ctx.rotate(rot);
     ctx.scale(scale, scale);
-    ctx.strokeStyle = ctrl.lineColor.value;
-    ctx.fillStyle = ctrl.lineColor.value;
-    ctx.lineWidth = parseInt(ctrl.lineW.value, 10);
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = lw;
 
-    let first = true;
-    if (!ctrl.asPoints.checked) ctx.beginPath();
-    for(let t = 0; t <= tMax; t += tStep){
-      const r = a + b * t;
-      const x = r * Math.cos(t);
-      const y = -r * Math.sin(t);
+    const asPts = ctrl.asPoints.checked;
+    const drawScan = ctrl.scanlines.checked && !ctrl.animate.checked; // skip in animation
 
-      if (ctrl.asPoints.checked){
-        ctx.fillRect(x, y, Math.max(1, ctx.lineWidth), Math.max(1, ctx.lineWidth));
-      } else {
-        if(first){ ctx.moveTo(x, y); first=false; }
+    if (!asPts) ctx.beginPath();
+    for(let i=0; i<pts2D.length; i++){
+      const p = pts2D[i];
+      const x = p.x, y = p.y;
+      if (asPts){
+        ctx.fillRect(x, y, Math.max(1, lw), Math.max(1, lw));
+      }else{
+        if (i===0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
-
-      if (ctrl.scanlines.checked){
+      if (drawScan){
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(x, y + 1);
@@ -170,50 +212,38 @@
         ctx.restore();
       }
     }
-    if (!ctrl.asPoints.checked) ctx.stroke();
+    if (!asPts) ctx.stroke();
     ctx.restore();
   }
 
   function draw3D(w, h){
-    const a = parseFloat(ctrl.a.value);
-    const b = parseFloat(ctrl.b.value);
-    const turns = parseInt(ctrl.turns.value, 10);
-    const tStep = parseFloat(ctrl.tStep.value);
     const scale = parseFloat(ctrl.scale.value);
     const uiRotZ = parseFloat(ctrl.rot.value) * Math.PI/180;
-    const tMax = turns * Math.PI * 2;
-
-    const zPerTurn = parseFloat(ctrl.zPerTurn.value);
     const fov = parseFloat(ctrl.fov.value);
     const color = ctrl.lineColor.value;
     const lw = parseInt(ctrl.lineW.value, 10);
 
     const ax = rotX * Math.PI/180;
     const ay = rotY * Math.PI/180;
-    const az = (rotZ) * Math.PI/180 + uiRotZ;
+    const az = rotZ * Math.PI/180 + uiRotZ;
 
-    ctx.lineWidth = lw;
+    const asPts = ctrl.asPoints.checked;
 
-    // We'll draw as continuous polyline with depth-based alpha per segment
     let prev = null;
-    for(let t = 0; t <= tMax; t += tStep){
-      const r = (a + b * t) * scale;
-      let x = r * Math.cos(t);
-      let y = -r * Math.sin(t);
-      let z = (zPerTurn * t) / (Math.PI * 2);
-
-      const v = rotateXYZ(x, y, z, ax, ay, az);
+    for(let i=0; i<pts3D.length; i++){
+      const b = pts3D[i];
+      const x0 = b.x * scale, y0 = b.y * scale, z0 = b.z * scale;
+      const v = rotateXYZ(x0, y0, z0, ax, ay, az);
       const p = project3D(v.x, v.y, v.z, fov, w, h);
 
-      if (ctrl.asPoints.checked){
-        const shade = Math.max(0.25, Math.min(1.0, 1.2 - (p.depth / (fov*2))));
-        ctx.globalAlpha = shade;
+      const shade = Math.max(0.25, Math.min(1.0, 1.2 - (p.depth / (fov*2))));
+      ctx.globalAlpha = shade;
+      if (asPts){
         ctx.fillStyle = color;
         ctx.fillRect(p.x, p.y, Math.max(1, lw), Math.max(1, lw));
       } else if (prev){
-        const shade = Math.max(0.25, Math.min(1.0, 1.2 - (p.depth / (fov*2))));
-        ctx.globalAlpha = shade;
         ctx.strokeStyle = color;
+        ctx.lineWidth = lw;
         ctx.beginPath();
         ctx.moveTo(prev.x, prev.y);
         ctx.lineTo(p.x, p.y);
@@ -251,7 +281,7 @@
       rotY = (rotY + sy * dt) % 360;
       rotZ = (rotZ + sz * dt) % 360;
     } else {
-      // in 2D, animate global rotation slowly
+      // 2D: animate global rotation
       const r = (parseFloat(ctrl.rot.value) + 20 * dt) % 360;
       ctrl.rot.value = ctrl.rotNum.value = r.toFixed(1);
     }
@@ -264,10 +294,43 @@
     if (ctrl.animate.checked && !animId){
       last = performance.now();
       animId = requestAnimationFrame(tick);
+    } else if (!ctrl.animate.checked){
+      draw(); // ensure scanlines appear again if enabled
     }
   });
 
   // Init
-  resize();
+  function initDefaults(){
+    ctrl.a.value = ctrl.aNum.value = ctrl.a?.value ?? 0;
+    ctrl.b.value = ctrl.bNum.value = ctrl.b?.value ?? 6;
+    ctrl.turns.value = ctrl.turnsNum.value = ctrl.turns?.value ?? 10;
+    ctrl.tStep.value = ctrl.tStepNum.value = ctrl.tStep?.value ?? 0.01;
+    ctrl.scale.value = ctrl.scaleNum.value = ctrl.scale?.value ?? 1;
+    ctrl.rot.value = ctrl.rotNum.value = ctrl.rot?.value ?? 0;
+    ctrl.lineColor.value = ctrl.lineColor?.value ?? '#2dd4bf';
+    ctrl.lineW.value = ctrl.lineW?.value ?? 2;
+    ctrl.asPoints.checked = !!ctrl.asPoints?.checked;
+    ctrl.scanlines.checked = !!ctrl.scanlines?.checked;
+    ctrl.mode3d.checked = !!ctrl.mode3d?.checked;
+    ctrl.zPerTurn.value = ctrl.zPerTurnNum.value = ctrl.zPerTurn?.value ?? 120;
+    ctrl.fov.value = ctrl.fovNum.value = ctrl.fov?.value ?? 700;
+    ctrl.rxSpeed.value = ctrl.rxSpeedNum.value = ctrl.rxSpeed?.value ?? 0;
+    ctrl.rySpeed.value = ctrl.rySpeedNum.value = ctrl.rySpeed?.value ?? 18;
+    ctrl.rzSpeed.value = ctrl.rzSpeedNum.value = ctrl.rzSpeed?.value ?? 0;
+  }
+
+  function resizeAndCompute(){
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    computeGeometry();
+  }
+
+  window.addEventListener('resize', ()=>{ resizeAndCompute(); draw(); });
+
+  initDefaults();
+  resizeAndCompute();
   draw();
 })();

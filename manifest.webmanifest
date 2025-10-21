@@ -1,7 +1,7 @@
 {
   "name": "Archimedes Spiral — PWA",
   "short_name": "Spiral",
-  "start_url": "./",
+  "start_url": "/archimedes_spiral/",
   "display": "standalone",
   "background_color": "#0b1022",
   "theme_color": "#0b1022",
@@ -33,5 +33,7 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "id": "/archimedes_spiral/",
+  "scope": "/archimedes_spiral/"
 }
