@@ -86,6 +86,34 @@
         <button id="btnExportSVG" class="ghost">Esporta SVG</button>
       </div>
 
+    
+      <div class="row">
+        <label>
+          <input type="checkbox" id="mode3d">
+          3D (elica)
+        </label>
+        <label>z per giro
+          <input type="range" id="zPerTurn" min="-400" max="400" step="1" value="120">
+          <input type="number" id="zPerTurnNum" min="-400" max="400" step="1" value="120">
+        </label>
+        <label>Prospettiva (FOV)
+          <input type="range" id="fov" min="200" max="1400" step="10" value="700">
+          <input type="number" id="fovNum" min="200" max="1400" step="10" value="700">
+        </label>
+        <label>Vel. rotazione X (°/s)
+          <input type="range" id="rxSpeed" min="-180" max="180" step="1" value="0">
+          <input type="number" id="rxSpeedNum" min="-180" max="180" step="1" value="0">
+        </label>
+        <label>Vel. rotazione Y (°/s)
+          <input type="range" id="rySpeed" min="-180" max="180" step="1" value="18">
+          <input type="number" id="rySpeedNum" min="-180" max="180" step="1" value="18">
+        </label>
+        <label>Vel. rotazione Z (°/s)
+          <input type="range" id="rzSpeed" min="-180" max="180" step="1" value="0">
+          <input type="number" id="rzSpeedNum" min="-180" max="180" step="1" value="0">
+        </label>
+      </div>
+    
     </section>
 
     <section class="stage card">
