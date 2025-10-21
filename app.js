@@ -2,20 +2,6 @@
 (function(){
   'use strict';
 
-  // ===== Debug Overlay =====
-  (function(){
-    const el = document.createElement('div');
-    el.id = 'debugOverlay';
-    el.style.cssText = 'position:fixed;left:8px;bottom:8px;right:auto;z-index:99999;font:12px/1.3 system-ui;background:#0b1022cc;color:#eaf1ff;border:1px solid #31407a;border-radius:10px;padding:8px 10px;max-width:60vw;';
-    el.innerHTML = '<b>Debug:</b> ready';
-    document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(el));
-    function log(msg){ console.log('[Spiral]', msg); el.innerHTML = '<b>Debug:</b> ' + msg; }
-    window.__spiralLog = log;
-    window.addEventListener('error', (e)=>{ el.innerHTML = '<b>Errore:</b> ' + e.message; console.error(e.error||e.message); });
-    window.addEventListener('unhandledrejection', (e)=>{ el.innerHTML = '<b>Promise:</b> ' + e.reason; console.error(e.reason); });
-  })();
-
-
   // --- Install prompt ---
   let deferredPrompt;
   const btnInstall = document.getElementById('btnInstall');
@@ -31,12 +17,16 @@
   });
 
   // --- SW (robust path for GH Pages subfolder) ---
-  /* SW removed in debug build */catch(e){}
+  if ('serviceWorker' in navigator) {
+    try{
+      const swPath = (location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/[^/]+$/,'')) + 'sw.js';
+      navigator.serviceWorker.register(swPath);
+    }catch(e){}
   }
 
   const $ = (s) => document.querySelector(s);
   const canvas = $('#canvas');
-  const ctx = canvas.getContext('2d'); __spiralLog('Canvas context: ' + (ctx ? 'ok' : 'null'));
+  const ctx = canvas.getContext('2d');
 
   // Controls
   const ctrl = {
@@ -121,7 +111,7 @@
   }
 
   // Recompute on parameter changes that affect geometry
-  function markDirty(){ computeGeometry(); draw(); __spiralLog('first draw done'); }
+  function markDirty(){ computeGeometry(); draw(); }
 
   ;[
     [ctrl.a, ctrl.aNum],
@@ -169,7 +159,7 @@
   });
 
   // Resize
-  function resize(){ __spiralLog('resize');
+  function resize(){
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.floor(rect.width * dpr);
@@ -320,7 +310,7 @@
     ctx.globalAlpha = 1;
   }
 
-  function draw(){ /* draw */
+  function draw(){
     const w = canvas.width / (window.devicePixelRatio || 1);
     const h = canvas.height / (window.devicePixelRatio || 1);
     ctx.clearRect(0, 0, w, h);
@@ -400,67 +390,9 @@
   // --- Recording (WebM via MediaRecorder) ---
   let mediaRecorder = null;
   let recordedChunks = [];
-  let _recPump = null;
-  let _recPrev = null;
 
   function startWebM(){
     if (!('MediaRecorder' in window)) { alert('MediaRecorder non supportato da questo browser'); return; }
-    const stream = canvas.captureStream(60); // 60 fps
-    const opts = { mimeType: 'video/webm;codecs=vp9' };
-    try{
-      mediaRecorder = new MediaRecorder(stream, opts);
-    }catch(e){
-      try{ mediaRecorder = new MediaRecorder(stream, {mimeType:'video/webm'}); }catch(err){
-        alert('Registrazione non supportata: ' + err); return;
-      }
-    }
-    recordedChunks = [];
-    mediaRecorder.ondataavailable = (e)=>{ if (e.data.size>0) recordedChunks.push(e.data); };
-    mediaRecorder.onstop = ()=>{
-      const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || 'video/webm'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'archimedes_spiral.webm';
-      a.click();
-      setTimeout(()=>URL.revokeObjectURL(url), 500);
-      ctrl.btnStopRecord.disabled = true;
-      ctrl.btnRecordWebM.disabled = false;
-      // restore previous speeds if we changed them
-      if (_recPrev && _recPrev.changed3D){
-        ctrl.rxSpeed.value = ctrl.rxSpeedNum.value = _recPrev.rx;
-        ctrl.rySpeed.value = ctrl.rySpeedNum.value = _recPrev.ry;
-        ctrl.rzSpeed.value = ctrl.rzSpeedNum.value = _recPrev.rz;
-      }
-      if (_recPump){ clearInterval(_recPump); _recPump = null; }
-      _recPrev = null;
-    };
-    mediaRecorder.start();
-    ctrl.btnStopRecord.disabled = false;
-    ctrl.btnRecordWebM.disabled = true;
-
-    // ensure animation is running
-    const wasAnimating = ctrl.animate.checked;
-    if (!wasAnimating){ ctrl.animate.checked = true; last = performance.now(); if(!animId) animId = requestAnimationFrame(tick); }
-
-    // if in 3D and all speeds are ~0, set a default Y spin so video non è statico
-    _recPrev = { rx: parseFloat(ctrl.rxSpeed.value)||0, ry: parseFloat(ctrl.rySpeed.value)||0, rz: parseFloat(ctrl.rzSpeed.value)||0, changed3D: false };
-    if (ctrl.mode3d.checked){
-      const isStill = Math.abs(_recPrev.rx) < 0.1 && Math.abs(_recPrev.ry) < 0.1 && Math.abs(_recPrev.rz) < 0.1;
-      if (isStill){
-        ctrl.rySpeed.value = ctrl.rySpeedNum.value = 18;
-        _recPrev.changed3D = true;
-      }
-    }
-
-    // fallback pump: some browsers throttle rAF during recording/inactive tabs
-    if (_recPump){ clearInterval(_recPump); }
-    _recPump = setInterval(()=>{
-      if (!animId){
-        last = performance.now();
-        animId = requestAnimationFrame(tick);
-      }
-    }, 1000/30);
-  }
     const stream = canvas.captureStream(60); // 60 fps
     const opts = { mimeType: 'video/webm;codecs=vp9' };
     try{
@@ -490,7 +422,7 @@
   }
 
   function stopWebM(){
-    try{ mediaRecorder?.stop(); }catch(_){}
+    mediaRecorder?.stop();
   }
 
   ctrl.btnRecordWebM?.addEventListener('click', startWebM);
@@ -767,10 +699,8 @@
     computeGeometry();
   }
 
-  window.addEventListener('resize', ()=>{ __spiralLog('resize+compute');
-  resizeAndCompute(); draw(); });
+  window.addEventListener('resize', ()=>{ resizeAndCompute(); draw(); });
 
-  __spiralLog('init defaults');
   initDefaults();
   resizeAndCompute();
   draw();

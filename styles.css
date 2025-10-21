@@ -45,6 +45,3 @@ footer{padding:12px; text-align:center; color:var(--muted); border-top:1px solid
 }
 
 /* Added quality, gradient, recording controls */
-
-/* Debug: ensure canvas min-height */
-#canvas{min-height:300px}
