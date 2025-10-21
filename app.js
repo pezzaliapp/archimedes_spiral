@@ -25,7 +25,7 @@
   function compute(){
     const b = parseFloat(bEl.value);
     const tMax = parseInt(turns.value,10) * Math.PI * 2;
-    const MAX = 12000;
+    const MAX = (quality?.value==='low'?6000:(quality?.value==='high'?24000:12000));
     const step = Math.max(0.003, tMax / MAX);
     P2 = []; P3 = [];
     for(let t=0; t<=tMax; t+=step){
@@ -104,6 +104,8 @@
   [mode,turns,bEl,lw,color,points,animate,zpt,fovEl,ry].forEach(el=>{
     el.addEventListener('input', ()=>{ sync3dUI(); compute(); });
   });
+  quality?.addEventListener('input', ()=>{ compute(); });
+  btnAutoQuality?.addEventListener('click', autoQuality);
 
   // Anim loop
   let last = performance.now();
@@ -121,6 +123,38 @@
       const swPath = (location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/[^/]+$/,'')) + 'sw.js';
       navigator.serviceWorker.register(swPath);
     }catch(e){ console.warn('SW register failed', e); }
+  }
+
+  
+  function autoQuality(){
+    const testDuration = 1000; // ms
+    let frames = 0;
+    const prev = animate.checked;
+    // ensure animation is running for the test
+    animate.checked = true;
+    let start = performance.now();
+    function testTick(now){
+      frames++;
+      // force some rotation so there's motion
+      const rotY = document.getElementById('ry');
+      rotY.value = parseFloat(rotY.value||'20') + 0.5;
+      draw((now - start)/1000);
+      if (now - start < testDuration){
+        requestAnimationFrame(testTick);
+      } else {
+        const fps = frames * 1000 / (now - start);
+        let level = 'med';
+        if (fps >= 55) level = 'high';
+        else if (fps >= 28) level = 'med';
+        else level = 'low';
+        quality.value = level;
+        compute();
+        draw(0);
+        if (!prev) animate.checked = false;
+        alert('FPS stimato: ' + fps.toFixed(0) + ' → Qualità: ' + (level=='high'?'Alta':level=='med'?'Media':'Bassa'));
+      }
+    }
+    requestAnimationFrame(testTick);
   }
 
   // Init
