@@ -129,4 +129,92 @@
   compute();
   startTime = performance.now();
   requestAnimationFrame(tick);
+
+  // ===== Preset Manager (no gradients/recorders) =====
+  const PRESETS_KEY = 'spiral_core_presets_v1';
+  const defaultPresets = {
+    "Classico": {mode:"2d", turns:12, b:6, lw:2, color:"#2dd4bf", points:false, animate:true, zpt:140, fov:700, ry:20},
+    "Punti": {mode:"2d", turns:16, b:4, lw:2, color:"#eaf1ff", points:true, animate:true, zpt:140, fov:700, ry:20},
+    "Demo Show": {mode:"3d", turns:14, b:6, lw:2, color:"#2dd4bf", points:false, animate:true, zpt:160, fov:740, ry:18}
+  };
+  function loadPresets(){
+    try{
+      const raw = localStorage.getItem(PRESETS_KEY);
+      const obj = raw ? JSON.parse(raw) : {};
+      for (const k in defaultPresets){ if (!(k in obj)) obj[k] = defaultPresets[k]; }
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(obj));
+      return obj;
+    }catch(e){ return {...defaultPresets}; }
+  }
+  function savePresets(obj){
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(obj));
+  }
+  function refreshPresetSelect(selected){
+    if (!presetSelect) return;
+    const all = loadPresets();
+    presetSelect.innerHTML = '';
+    Object.keys(all).sort().forEach(name=>{
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      if (selected && selected === name) opt.selected = true;
+      presetSelect.appendChild(opt);
+    });
+  }
+  function getControls(){
+    return {
+      mode: document.getElementById('mode')?.value || '2d',
+      turns: parseInt(document.getElementById('turns')?.value||'12',10),
+      b: parseFloat(document.getElementById('b')?.value||'6'),
+      lw: parseInt(document.getElementById('lw')?.value||'2',10),
+      color: document.getElementById('color')?.value || '#2dd4bf',
+      points: !!document.getElementById('points')?.checked,
+      animate: !!document.getElementById('animate')?.checked,
+      zpt: parseFloat(document.getElementById('zpt')?.value||'140'),
+      fov: parseFloat(document.getElementById('fov')?.value||'700'),
+      ry: parseFloat(document.getElementById('ry')?.value||'20')
+    };
+  }
+  function applyControls(p){
+    const set = (id,v)=>{ const el = document.getElementById(id); if(!el) return; if(el.type==='checkbox') el.checked=!!v; else el.value=v; el.dispatchEvent(new Event('input')); };
+    set('mode', p.mode);
+    set('turns', p.turns);
+    set('b', p.b);
+    set('lw', p.lw);
+    set('color', p.color);
+    set('points', p.points);
+    set('animate', p.animate);
+    set('zpt', p.zpt);
+    set('fov', p.fov);
+    set('ry', p.ry);
+  }
+
+  refreshPresetSelect('Demo Show');
+
+  presetSelect?.addEventListener('change', ()=>{
+    const all = loadPresets();
+    const name = presetSelect.value;
+    if (all[name]) applyControls(all[name]);
+  });
+  btnSavePreset?.addEventListener('click', ()=>{
+    const name = (presetName?.value || '').trim();
+    if (!name){ alert('Inserisci un nome preset'); return; }
+    const all = loadPresets();
+    all[name] = getControls();
+    savePresets(all);
+    refreshPresetSelect(name);
+    presetName.value='';
+  });
+  btnDeletePreset?.addEventListener('click', ()=>{
+    const name = presetSelect?.value;
+    if (!name) return;
+    const base = loadPresets();
+    if (name in defaultPresets){ alert('Non puoi eliminare un preset di default'); return; }
+    delete base[name];
+    savePresets(base);
+    refreshPresetSelect();
+  });
+  btnDemoShow?.addEventListener('click', ()=>{
+    applyControls(defaultPresets["Demo Show"]);
+  });
+
 })();

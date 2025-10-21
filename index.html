@@ -45,6 +45,19 @@
       <label class="only3d" style="display:none">FOV <input id="fov" type="number" min="200" max="1400" step="10" value="700" style="width:72px"></label>
       <label class="only3d" style="display:none">Rot Y (°/s) <input id="ry" type="number" min="-180" max="180" step="1" value="20" style="width:72px"></label>
     </div>
+
+    <div class="controls" id="presetBar" style="gap:8px;margin-top:6px">
+      <label>Preset
+        <select id="presetSelect"></select>
+      </label>
+      <label>Nome preset
+        <input type="text" id="presetName" placeholder="es. Demo elegante" style="width:180px">
+      </label>
+      <button id="btnSavePreset" class="ghost">Salva preset</button>
+      <button id="btnDeletePreset" class="ghost">Elimina preset</button>
+      <button id="btnDemoShow" class="ghost">Demo Show</button>
+    </div>
+
     <div class="stage"><canvas id="cv"></canvas></div>
   </main>
   <footer>© 2025 — versione minimale di emergenza</footer>
