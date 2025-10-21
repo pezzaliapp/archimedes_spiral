@@ -1,166 +1,180 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-  <title>Archimedes Spiral — PWA</title>
-  <meta name="theme-color" content="#0b1022">
-  <meta name="description" content="Spirale di Archimede interattiva — PWA offline con parametri modificabili.">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icons/icon-192.png">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Archimedes Spiral — PWA Core (offline)</title>
+<meta name="theme-color" content="#0b1022">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root{--bg:#0b1022;--ink:#eaf1ff;--muted:#93a4cc}
+  html,body{height:100%}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -20%,#172042,var(--bg));color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;display:flex;flex-direction:column}
+  header{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #1c2550;background:#0e1533cc;backdrop-filter:blur(6px)}
+  main{flex:1 1 auto;display:flex;flex-direction:column;gap:8px;padding:8px}
+  .controls{display:flex;flex-wrap:wrap;gap:8px}
+  .controls label{background:#0f1636;border:1px solid #1c2550;border-radius:10px;padding:6px 8px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .stage{flex:1 1 auto;border:1px solid #1c2550;border-radius:14px;overflow:hidden;background:#0b1130;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  canvas{display:block;width:100%;height:100%}
+  footer{padding:8px;text-align:center;color:var(--muted);border-top:1px solid #1c2550}
+</style>
 </head>
 <body>
+
   <header>
-    <div class="brand">
-      <img src="icons/icon-192.png" alt="Icona" width="28" height="28">
-      <h1>Archimedes Spiral</h1>
-    </div>
-    <button id="btnInstall" class="ghost" title="Installa">⬇️ Installa</button>
+    <strong>Archimedes Spiral — PWA Core</strong>
+    <span style="opacity:.7">Modalità sicura (no cache, 1 file)</span>
   </header>
-
   <main>
-    <section class="controls card">
-      <div class="row">
-        <label>a <small>(offset)</small>
-          <input type="range" id="a" min="-200" max="200" step="1" value="0">
-          <input type="number" id="aNum" min="-200" max="200" step="1" value="0">
-        </label>
-        <label>b <small>(passo)</small>
-          <input type="range" id="b" min="1" max="30" step="0.5" value="6">
-          <input type="number" id="bNum" min="1" max="30" step="0.5" value="6">
-        </label>
-        <label>Giri
-          <input type="range" id="turns" min="1" max="30" step="1" value="10">
-          <input type="number" id="turnsNum" min="1" max="30" step="1" value="10">
-        </label>
-      </div>
-      <div class="row">
-        <label>Passo θ
-          <input type="range" id="tStep" min="0.001" max="0.1" step="0.001" value="0.01">
-          <input type="number" id="tStepNum" min="0.001" max="0.1" step="0.001" value="0.01">
-        </label>
-        <label>Scala
-          <input type="range" id="scale" min="0.5" max="2" step="0.01" value="1">
-          <input type="number" id="scaleNum" min="0.5" max="2" step="0.01" value="1">
-        </label>
-        <label>Rotazione
-          <input type="range" id="rot" min="0" max="360" step="1" value="0">
-          <input type="number" id="rotNum" min="0" max="360" step="1" value="0">
-        </label>
-      </div>
-      <div class="row">
-        <label>Colore linea
-          <input type="color" id="lineColor" value="#2dd4bf">
-        </label>
-        <label>Spessore
-          <input type="range" id="lineW" min="1" max="6" step="1" value="2">
-        </label>
-        <label>
-          <input type="checkbox" id="asPoints">
-          Solo punti
-        </label>
-        <label>
-          <input type="checkbox" id="scanlines">
-          Barre verticali
-        </label>
-        <label>
-          <input type="checkbox" id="animate">
-          Anima
-        </label>
-        <button id="btnReset" class="ghost">Reset</button>
-      </div>
-    
-      <div class="row">
-        <label>Preset
-          <select id="presetSelect"></select>
-        </label>
-        <button id="btnAutoQuality" class="ghost">Qualità Auto</button>
-        <label>Nome preset
-          <input type="text" id="presetName" placeholder="es. Demo elegante">
-        </label>
-        <button id="btnSavePreset" class="ghost">Salva preset</button>
-        <button id="btnDeletePreset" class="ghost">Elimina preset</button>
-        <span class="spacer"></span>
-        <button id="btnExportPNG" class="ghost">Esporta PNG</button>
-        <button id="btnExportSVG" class="ghost">Esporta SVG</button>
-      </div>
-
-    
-      <div class="row">
-        <label>
-          <input type="checkbox" id="mode3d">
-          3D (elica)
-        </label>
-        <label>z per giro
-          <input type="range" id="zPerTurn" min="-400" max="400" step="1" value="120">
-          <input type="number" id="zPerTurnNum" min="-400" max="400" step="1" value="120">
-        </label>
-        <label>Prospettiva (FOV)
-          <input type="range" id="fov" min="200" max="1400" step="10" value="700">
-          <input type="number" id="fovNum" min="200" max="1400" step="10" value="700">
-        </label>
-        <label>Vel. rotazione X (°/s)
-          <input type="range" id="rxSpeed" min="-180" max="180" step="1" value="0">
-          <input type="number" id="rxSpeedNum" min="-180" max="180" step="1" value="0">
-        </label>
-        <label>Vel. rotazione Y (°/s)
-          <input type="range" id="rySpeed" min="-180" max="180" step="1" value="18">
-          <input type="number" id="rySpeedNum" min="-180" max="180" step="1" value="18">
-        </label>
-        <label>Vel. rotazione Z (°/s)
-          <input type="range" id="rzSpeed" min="-180" max="180" step="1" value="0">
-          <input type="number" id="rzSpeedNum" min="-180" max="180" step="1" value="0">
-        </label>
-      </div>
-    
-    
-      <div class="row">
-        <label>Qualità
-          <select id="quality">
-            <option value="low">Bassa</option>
-            <option value="med" selected>Media</option>
-            <option value="high">Alta</option>
-          </select>
-        </label>
-        <button id="btnAutoQuality" class="ghost">Qualità Auto</button>
-        <label>Gradiente colore
-          <select id="gradientMode">
-            <option value="none" selected>Nessuno</option>
-            <option value="depth">Profondità</option>
-            <option value="radius">Distanza dal centro</option>
-          </select>
-        </label>
-        <button id="btnAutoQuality" class="ghost">Qualità Auto</button>
-        <label>
-          <input type="checkbox" id="autoDemo">
-          Demo automatica (screensaver)
-        </label>
-        <div></div>
-        <button id="btnRecordWebM" class="ghost">Rec WebM</button>
-        <button id="btnStopRecord" class="ghost" disabled>Stop</button>
-        <button id="btnFramesZip" class="ghost">PNG frames (zip)</button>
-        <button id="btnExportGIF" class="ghost">Export GIF (beta)</button>
-      </div>
-
-    </section>
-
-    <section class="stage card">
-      <canvas id="canvas"></canvas>
-    </section>
-
-    <section class="about card">
-      <h2>Cos'è</h2>
-      <p>La spirale di Archimede è definita da <code>r = a + b·θ</code>. Con i controlli sopra
-      puoi modificare i parametri e vedere il risultato in tempo reale. Installa la PWA per usarla offline.</p>
-    </section>
+    <div class="controls">
+      <label>Modo
+        <select id="mode">
+          <option value="2d" selected>2D</option>
+          <option value="3d">3D (elica)</option>
+        </select>
+      </label>
+      <label>Giri <input id="turns" type="number" min="1" max="50" step="1" value="12" style="width:72px"></label>
+      <label>Passo b <input id="b" type="number" min="1" max="30" step="0.5" value="6" style="width:72px"></label>
+      <label>Spessore <input id="lw" type="number" min="1" max="5" step="1" value="2" style="width:64px"></label>
+      <label>Colore <input id="color" type="color" value="#2dd4bf"></label>
+      <label><input id="points" type="checkbox"> Punti</label>
+      <label><input id="animate" type="checkbox" checked> Anima</label>
+      <label class="only3d" style="display:none">z/giro <input id="zpt" type="number" min="-400" max="400" step="1" value="140" style="width:72px"></label>
+      <label class="only3d" style="display:none">FOV <input id="fov" type="number" min="200" max="1400" step="10" value="700" style="width:72px"></label>
+      <label class="only3d" style="display:none">Rot Y (°/s) <input id="ry" type="number" min="-180" max="180" step="1" value="20" style="width:72px"></label>
+    </div>
+    <div class="stage"><canvas id="cv"></canvas></div>
   </main>
+  <footer>© 2025 — versione minimale di emergenza</footer>
 
-  <footer>
-    <small>© 2025 — Archimedes Spiral (PWA) · MIT License</small>
-  </footer>
+<script>
+(function(){
+  'use strict';
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const $ = id => document.getElementById(id);
 
-  <script src="app.js"></script>
+  const mode = $('mode'), turns = $('turns'), bEl = $('b'), lw = $('lw'),
+        color = $('color'), points = $('points'), animate = $('animate'),
+        zpt = $('zpt'), fovEl = $('fov'), ry = $('ry');
+  const only3d = Array.from(document.querySelectorAll('.only3d'));
+
+  // Resize
+  function resize(){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = Math.max(1, Math.floor(w * dpr));
+    cv.height = Math.max(1, Math.floor(h * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', ()=>{ resize(); compute(); draw(0); });
+
+  // Geometry cache
+  let P2 = [], P3 = [];
+  function compute(){
+    const b = parseFloat(bEl.value);
+    const tMax = parseInt(turns.value,10) * Math.PI * 2;
+    const MAX = 12000;
+    const step = Math.max(0.003, tMax / MAX);
+    P2 = []; P3 = [];
+    for(let t=0; t<=tMax; t+=step){
+      const r = b * t;
+      const x = r*Math.cos(t), y = -r*Math.sin(t);
+      P2.push({x,y,r,t});
+      const z = (parseFloat(zpt.value) * t)/(Math.PI*2);
+      P3.push({x,y,z,r,t});
+    }
+  }
+
+  function project3D(x,y,z,fov,w,h){
+    const dz = z + fov;
+    const px = (x*fov)/dz, py = (y*fov)/dz;
+    return {x:px + w/2, y:py + h/2, d:dz};
+  }
+  function rotateY(x,y,z,ang){
+    const c=Math.cos(ang), s=Math.sin(ang);
+    return {x: x*c + z*s, y, z: -x*s + z*c};
+  }
+
+  // Draw
+  function draw(t){
+    const w = cv.width/(window.devicePixelRatio||1);
+    const h = cv.height/(window.devicePixelRatio||1);
+    ctx.clearRect(0,0,w,h);
+
+    ctx.lineWidth = Math.max(1, parseInt(lw.value,10));
+    const asPts = !!points.checked;
+    const col = color.value;
+
+    if (mode.value === '2d'){
+      // rotate slowly over time
+      const rot = t*0.6; // rad/s
+      ctx.save();
+      ctx.translate(w/2, h/2);
+      ctx.rotate(rot);
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+
+      if (!asPts) ctx.beginPath();
+      for(let i=0;i<P2.length;i++){
+        const p = P2[i];
+        const x = p.x, y = p.y;
+        if (asPts) ctx.fillRect(x,y,ctx.lineWidth,ctx.lineWidth);
+        else (i===0?ctx.moveTo(x,y):ctx.lineTo(x,y));
+      }
+      if (!asPts) ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    // 3D
+    const fov = parseFloat(fovEl.value);
+    const angY = (t * (parseFloat(ry.value)*Math.PI/180));
+    let prev = null;
+    ctx.strokeStyle = col; ctx.fillStyle = col;
+
+    for(let i=0;i<P3.length;i++){
+      const b = P3[i];
+      const rY = rotateY(b.x, b.y, b.z, angY);
+      const p = project3D(rY.x, rY.y, rY.z, fov, w, h);
+      if (asPts){
+        ctx.fillRect(p.x, p.y, ctx.lineWidth, ctx.lineWidth);
+      } else if (prev){
+        ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      }
+      prev = p;
+    }
+  }
+
+  // UI
+  function sync3dUI(){
+    const is3d = mode.value === '3d';
+    only3d.forEach(el => el.style.display = is3d ? '' : 'none');
+  }
+  [mode,turns,bEl,lw,color,points,animate,zpt,fovEl,ry].forEach(el=>{
+    el.addEventListener('input', ()=>{ sync3dUI(); compute(); });
+  });
+
+  // Anim loop
+  let last = performance.now();
+  function tick(now){
+    if (!animate.checked) { draw(0); return; }
+    const t = (now - startTime)/1000;
+    draw(t);
+    requestAnimationFrame(tick);
+  }
+  let startTime = performance.now();
+
+  // Init
+  sync3dUI();
+  resize();
+  compute();
+  startTime = performance.now();
+  requestAnimationFrame(tick);
+})();
+</script>
+
+<script src="app.js"></script>
 </body>
 </html>
