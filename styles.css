@@ -1,0 +1,45 @@
+/* Styles — Archimedes Spiral PWA */
+:root{
+  --bg:#0b1022; --ink:#eaf1ff; --muted:#93a4cc;
+  --card:#101739; --line:#1c2550; --cta:#2dd4bf;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  color:var(--ink); background:radial-gradient(1200px 600px at 50% -20%,#172042,var(--bg));
+  display:flex; flex-direction:column;
+}
+header{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 14px; border-bottom:1px solid var(--line); background:#0e1533cc; backdrop-filter:blur(6px);
+  position:sticky; top:0; z-index:10;
+}
+header .brand{display:flex; gap:8px; align-items:center}
+h1{font-size:16px; margin:0}
+main{max-width:1100px; width:100%; margin:16px auto; padding:0 12px; flex:1 0 auto}
+.card{
+  background:linear-gradient(180deg,#0f1636 0%, #0b1130 100%);
+  border:1px solid #1c2550; border-radius:14px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,0.25);
+}
+.controls .row{display:grid; grid-template-columns: repeat(6, minmax(130px,1fr)); gap:10px; margin-bottom:8px}
+.controls label{display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted)}
+.controls input[type="number"]{width:100%; padding:6px 8px; background:#0a1334; color:var(--ink); border:1px solid #1c2550; border-radius:8px}
+.controls input[type="range"]{width:100%}
+.controls input[type="checkbox"]{margin-right:6px}
+button.ghost{
+  background:transparent; color:var(--ink); border:1px solid #2a366d; border-radius:10px; padding:8px 12px; cursor:pointer;
+}
+.stage{padding:0; overflow:hidden}
+#canvas{display:block; width:100%; height:64vh}
+.about h2{margin:6px 0 8px}
+footer{padding:12px; text-align:center; color:var(--muted); border-top:1px solid var(--line)}
+@media (max-width: 900px){
+  .controls .row{grid-template-columns: repeat(2, minmax(140px,1fr))}
+  #canvas{height:60vh}
+}
+
+.controls .row .spacer{display:block}
+@media (min-width: 901px){
+  .controls .row{grid-template-columns: repeat(6, minmax(130px,1fr))}
+}
