@@ -56,7 +56,10 @@
     autoDemo: $('#autoDemo'),
     btnRecordWebM: $('#btnRecordWebM'),
     btnStopRecord: $('#btnStopRecord'),
-    btnFramesZip: $('#btnFramesZip')
+    btnFramesZip: $('#btnFramesZip'),
+    btnExportGIF: $('#btnExportGIF'),
+    btnAutoQuality: $('#btnAutoQuality'),
+    presetSelect: $('#presetSelect'), presetName: $('#presetName'), btnSavePreset: $('#btnSavePreset'), btnDeletePreset: $('#btnDeletePreset')
   };
 
   // Sync helpers
@@ -352,6 +355,38 @@
     }
   });
 
+  
+  // ===== Qualità Auto (1s FPS test) =====
+  function autoQuality(){
+    const testDuration = 1000; // ms
+    let frames = 0;
+    const prevAnimate = ctrl.animate.checked;
+    const start = performance.now();
+    function testTick(now){
+      frames++;
+      // simple spin
+      ctrl.rot.value = ctrl.rotNum.value = ((parseFloat(ctrl.rot.value)||0) + 90/60) % 360;
+      draw();
+      if (now - start < testDuration){
+        requestAnimationFrame(testTick);
+      } else {
+        const fps = frames * 1000 / (now - start);
+        let level = 'med';
+        if (fps > 50) level = 'high';
+        else if (fps > 30) level = 'med';
+        else level = 'low';
+        ctrl.quality.value = level;
+        computeGeometry(); draw();
+        if (!prevAnimate){ ctrl.animate.checked = false; }
+        alert('FPS stimato: ' + fps.toFixed(0) + ' → Qualità: ' + (level=='high'?'Alta':level=='med'?'Media':'Bassa'));
+      }
+    }
+    // ensure not animating (we control the loop)
+    ctrl.animate.checked = false;
+    requestAnimationFrame(testTick);
+  }
+  ctrl.btnAutoQuality?.addEventListener('click', autoQuality);
+
   // --- Recording (WebM via MediaRecorder) ---
   let mediaRecorder = null;
   let recordedChunks = [];
@@ -394,6 +429,158 @@
   ctrl.btnStopRecord?.addEventListener('click', stopWebM);
 
   // --- PNG frames ZIP (fallback for GIF via strumenti esterni) ---
+  
+  // --- Export GIF (beta) — 2-color palette (bg + line); best with Gradient=None ---
+  ctrl.btnExportGIF?.addEventListener('click', async ()=>{
+    if ((ctrl.gradientMode?.value || 'none') !== 'none'){
+      alert('Per ora il GIF export funziona meglio con Gradiente = Nessuno.');
+      return;
+    }
+    const seconds = 4, fps = 20;
+    const total = seconds * fps;
+    const delayCs = Math.round(100 / fps); // delay in 1/100 s units per frame
+    const w = 512, h = 512; // fixed export size
+    const off = document.createElement('canvas');
+    off.width = w; off.height = h;
+    const octx = off.getContext('2d');
+
+    // temporary render: draw current view scaled to 512x512
+    const frames = [];
+    const prevAnim = ctrl.animate.checked;
+    if (!prevAnim){ ctrl.animate.checked = true; last = performance.now(); if(!animId) animId = requestAnimationFrame(tick); }
+
+    for (let i=0;i<total;i++){
+      await new Promise(r=>setTimeout(r, 1000/fps));
+      octx.fillStyle = '#0b1022'; octx.fillRect(0,0,w,h);
+      // draw current canvas into offscreen
+      octx.drawImage(canvas, 0, 0, w, h);
+      const img = octx.getImageData(0,0,w,h);
+      frames.push(img);
+    }
+    if (!prevAnim){ ctrl.animate.checked = false; }
+
+    // Build a very simple GIF with 2-color global palette: bg + average line color
+    function avgLineRGB(){
+      // sample center pixel ring to guess line color; fallback to chosen lineColor
+      const hex = ctrl.lineColor.value;
+      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      if(!m) return {r:45,g:212,b:191};
+      return {r:parseInt(m[1],16), g:parseInt(m[2],16), b:parseInt(m[3],16)};
+    }
+    const lineRGB = avgLineRGB();
+    const bg = {r:11,g:16,b:34};
+    const palette = [bg.r,bg.g,bg.b, lineRGB.r,lineRGB.g,lineRGB.b]; // 2 colors
+
+    // LZW encoder for GIF (minimal)
+    function lzwEncode(indices, minCodeSize){
+      const CLEAR = 1 << minCodeSize;
+      const END = CLEAR + 1;
+      let dict = new Map();
+      let nextCode = END + 1;
+      const bits = [];
+      function writeBits(code, nbits){
+        for(let i=0;i<nbits;i++){
+          bits.push((code >> i) & 1);
+        }
+      }
+      let codeSize = minCodeSize + 1;
+      let string = indices[0].toString();
+      writeBits(CLEAR, codeSize);
+      for(let i=1;i<indices.length;i++){
+        const ch = indices[i].toString();
+        const strch = string + ',' + ch;
+        if (dict.has(strch)){
+          string = strch;
+        } else {
+          // output code for string
+          const out = string.indexOf(',')===-1 ? parseInt(string,10) : dict.get(string);
+          writeBits(out, codeSize);
+          // add to dict
+          dict.set(strch, nextCode++);
+          // bump code size
+          if (nextCode === (1<<codeSize) && codeSize < 12) codeSize++;
+          string = ch;
+        }
+      }
+      const out = string.indexOf(',')===-1 ? parseInt(string,10) : dict.get(string);
+      writeBits(out, codeSize);
+      writeBits(END, codeSize);
+      // pack bits into bytes, little-endian per sub-block
+      const bytes = [];
+      for(let i=0;i<bits.length;i+=8){
+        let b=0;
+        for(let j=0;j<8 && i+j<bits.length;j++){
+          b |= bits[i+j] << j;
+        }
+        bytes.push(b);
+      }
+      return new Uint8Array(bytes);
+    }
+
+    function buildGIF(frames){
+      const w = frames[0].width, h = frames[0].height;
+      const stream = [];
+      function pushBytes(arr){ for(let i=0;i<arr.length;i++) stream.push(arr[i]); }
+      function pushStr(s){ for(let i=0;i<s.length;i++) stream.push(s.charCodeAt(i)); }
+
+      // Header + LSD
+      pushStr('GIF89a');
+      // Logical Screen Descriptor
+      stream.push(w & 0xFF, (w>>8)&0xFF, h & 0xFF, (h>>8)&0xFF);
+      // GCT flag(1) | color res(3) | sort(1) | size of GCT(3) -> 2 colors => size code 0 (2^(0+1)=2)
+      stream.push(0x80 | (7<<4) | 0x00 | 0x00);
+      // Background color index
+      stream.push(0x00);
+      // Pixel aspect ratio
+      stream.push(0x00);
+      // Global Color Table (2 entries, padded to 2^1=2)
+      pushBytes(palette);
+
+      for (let f=0; f<frames.length; f++){
+        const img = frames[f];
+        // Graphic Control Extension
+        pushBytes([0x21, 0xF9, 0x04, 0x00, delayCs & 0xFF, (delayCs>>8)&0xFF, 0x00, 0x00]);
+        // Image Descriptor
+        pushBytes([0x2C, 0x00,0x00, 0x00,0x00, w & 0xFF,(w>>8)&0xFF, h & 0xFF,(h>>8)&0xFF, 0x00]);
+
+        // Build indices: 0 for bg, 1 for line (threshold on distance to bg vs line color)
+        const data = img.data;
+        const idx = new Uint8Array(w*h);
+        for(let i=0,j=0;i<data.length;i+=4,j++){
+          const r=data[i],g=data[i+1],b=data[i+2];
+          const db = Math.hypot(r-bg.r,g-bg.g,b-bg.b);
+          const dl = Math.hypot(r-lineRGB.r,g-lineRGB.g,b-lineRGB.b);
+          idx[j] = dl < db ? 1 : 0;
+        }
+        // LZW min code size = 2 (for 2 colors)
+        const lzw = lzwEncode(idx, 1); // minCodeSize 1 -> codes 0,1; clear=2, end=3
+        // Write LZW min code size byte
+        stream.push(0x01);
+        // Sub-blocks (size<=255)
+        let p=0;
+        while (p < lzw.length){
+          const n = Math.min(255, lzw.length - p);
+          stream.push(n);
+          for(let k=0;k<n;k++) stream.push(lzw[p+k]);
+          p += n;
+        }
+        // Block terminator
+        stream.push(0x00);
+      }
+
+      // Trailer
+      stream.push(0x3B);
+      return new Blob([new Uint8Array(stream)], {type:'image/gif'});
+    }
+
+    const gif = buildGIF(frames);
+    const url = URL.createObjectURL(gif);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'archimedes_spiral.gif';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 500);
+  });
+
   ctrl.btnFramesZip?.addEventListener('click', async ()=>{
     // Record ~5s @ 30fps => 150 frames
     const frames = 150, fps = 30;
@@ -418,6 +605,84 @@
       a.click();
     });
     alert('Frame PNG salvati (uno per volta). Usa un tool esterno per creare una GIF.');
+  });
+
+  
+  // ===== Preset Manager (with Demo Show) =====
+  const PRESETS_KEY = 'arch_spiral_presets_v2';
+  const defaultPresets = {
+    "Classico": {a:0,b:6,turns:10,tStep:0.01,scale:1,rot:0,lineColor:"#2dd4bf",lineW:2,asPoints:false,scanlines:false,mode3d:false,gradientMode:"none",quality:"med",rx:0,ry:0,rz:0,zPerTurn:120,fov:700,animate:false},
+    "Punti delicati": {a:0,b:4,turns:16,tStep:0.02,scale:1,rot:0,lineColor:"#eaf1ff",lineW:2,asPoints:true,scanlines:false,mode3d:false,gradientMode:"none",quality:"med",rx:0,ry:0,rz:0,zPerTurn:120,fov:700,animate:false},
+    "Scanline retro": {a:0,b:7,turns:12,tStep:0.015,scale:1,rot:0,lineColor:"#93a4cc",lineW:1,asPoints:false,scanlines:true,mode3d:false,gradientMode:"none",quality:"low",rx:0,ry:0,rz:0,zPerTurn:120,fov:700,animate:false},
+    "Spessore artistico": {a:10,b:10,turns:8,tStep:0.008,scale:1,rot:15,lineColor:"#22c55e",lineW:4,asPoints:false,scanlines:false,mode3d:false,gradientMode:"none",quality:"high",rx:0,ry:0,rz:0,zPerTurn:120,fov:700,animate:false},
+    "Demo Show": {a:0,b:6,turns:14,tStep:0.012,scale:1,rot:0,lineColor:"#2dd4bf",lineW:2,asPoints:false,scanlines:false,mode3d:true,gradientMode:"depth",quality:"med",rx:8,ry:18,rz:0,zPerTurn:140,fov:740,animate:true}
+  };
+  function loadPresets(){
+    let data = localStorage.getItem(PRESETS_KEY);
+    let obj = data ? JSON.parse(data) : {};
+    for(const k in defaultPresets){ if(!(k in obj)) obj[k] = defaultPresets[k]; }
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(obj));
+    return obj;
+  }
+  function savePresets(obj){ localStorage.setItem(PRESETS_KEY, JSON.stringify(obj)); }
+  function refreshPresetSelect(selected){
+    const obj = loadPresets();
+    const sel = ctrl.presetSelect;
+    if (!sel) return;
+    sel.innerHTML = '';
+    Object.keys(obj).sort().forEach(name=>{
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      if (selected && selected === name) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+  function applyPreset(p){
+    ctrl.a.value = ctrl.aNum.value = p.a;
+    ctrl.b.value = ctrl.bNum.value = p.b;
+    ctrl.turns.value = ctrl.turnsNum.value = p.turns;
+    ctrl.tStep.value = ctrl.tStepNum.value = p.tStep;
+    ctrl.scale.value = ctrl.scaleNum.value = p.scale;
+    ctrl.rot.value = ctrl.rotNum.value = p.rot;
+    ctrl.lineColor.value = p.lineColor;
+    ctrl.lineW.value = p.lineW;
+    ctrl.asPoints.checked = !!p.asPoints;
+    ctrl.scanlines.checked = !!p.scanlines;
+    ctrl.mode3d.checked = !!p.mode3d;
+    ctrl.gradientMode.value = p.gradientMode || 'none';
+    ctrl.quality.value = p.quality || 'med';
+    ctrl.rxSpeed.value = ctrl.rxSpeedNum.value = p.rx || 0;
+    ctrl.rySpeed.value = ctrl.rySpeedNum.value = p.ry || 0;
+    ctrl.rzSpeed.value = ctrl.rzSpeedNum.value = p.rz || 0;
+    ctrl.zPerTurn.value = ctrl.zPerTurnNum.value = p.zPerTurn || 120;
+    ctrl.fov.value = ctrl.fovNum.value = p.fov || 700;
+    ctrl.animate.checked = !!p.animate;
+    computeGeometry();
+    draw();
+    // start animation if preset says so
+    if (ctrl.animate.checked){ last = performance.now(); if(!animId) animId = requestAnimationFrame(tick); }
+  }
+  ctrl.presetSelect?.addEventListener('change', ()=>{
+    const all = loadPresets(); const name = ctrl.presetSelect.value; if (all[name]) applyPreset(all[name]);
+  });
+  ctrl.btnSavePreset?.addEventListener('click', ()=>{
+    const name = (ctrl.presetName?.value || '').trim(); if (!name){ alert('Inserisci un nome preset'); return; }
+    const all = loadPresets();
+    all[name] = {
+      a: parseFloat(ctrl.a.value), b: parseFloat(ctrl.b.value), turns: parseInt(ctrl.turns.value,10), tStep: parseFloat(ctrl.tStep.value),
+      scale: parseFloat(ctrl.scale.value), rot: parseFloat(ctrl.rot.value), lineColor: ctrl.lineColor.value, lineW: parseInt(ctrl.lineW.value,10),
+      asPoints: !!ctrl.asPoints.checked, scanlines: !!ctrl.scanlines.checked, mode3d: !!ctrl.mode3d.checked,
+      gradientMode: ctrl.gradientMode.value, quality: ctrl.quality.value,
+      rx: parseFloat(ctrl.rxSpeed.value)||0, ry: parseFloat(ctrl.rySpeed.value)||0, rz: parseFloat(ctrl.rzSpeed.value)||0,
+      zPerTurn: parseFloat(ctrl.zPerTurn.value)||120, fov: parseFloat(ctrl.fov.value)||700,
+      animate: !!ctrl.animate.checked
+    };
+    savePresets(all); refreshPresetSelect(name); ctrl.presetName.value='';
+  });
+  ctrl.btnDeletePreset?.addEventListener('click', ()=>{
+    const sel = ctrl.presetSelect?.value; const all = loadPresets(); if (!sel || !(sel in all)) return;
+    if (defaultPresets[sel]){ alert('Non puoi eliminare un preset di default'); return; }
+    delete all[sel]; savePresets(all); refreshPresetSelect();
   });
 
   // Init

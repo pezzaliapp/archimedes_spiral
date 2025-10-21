@@ -1,5 +1,5 @@
 // sw.js — cache-first app shell
-const CACHE = 'archimedes-pwa-v4';
+const CACHE = 'archimedes-pwa-v5';
 const ASSETS = [
   './',
   './index.html',
