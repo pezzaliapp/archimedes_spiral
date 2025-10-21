@@ -2,6 +2,20 @@
 (function(){
   'use strict';
 
+  // ===== Debug Overlay =====
+  (function(){
+    const el = document.createElement('div');
+    el.id = 'debugOverlay';
+    el.style.cssText = 'position:fixed;left:8px;bottom:8px;right:auto;z-index:99999;font:12px/1.3 system-ui;background:#0b1022cc;color:#eaf1ff;border:1px solid #31407a;border-radius:10px;padding:8px 10px;max-width:60vw;';
+    el.innerHTML = '<b>Debug:</b> ready';
+    document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(el));
+    function log(msg){ console.log('[Spiral]', msg); el.innerHTML = '<b>Debug:</b> ' + msg; }
+    window.__spiralLog = log;
+    window.addEventListener('error', (e)=>{ el.innerHTML = '<b>Errore:</b> ' + e.message; console.error(e.error||e.message); });
+    window.addEventListener('unhandledrejection', (e)=>{ el.innerHTML = '<b>Promise:</b> ' + e.reason; console.error(e.reason); });
+  })();
+
+
   // --- Install prompt ---
   let deferredPrompt;
   const btnInstall = document.getElementById('btnInstall');
@@ -17,16 +31,12 @@
   });
 
   // --- SW (robust path for GH Pages subfolder) ---
-  if ('serviceWorker' in navigator) {
-    try{
-      const swPath = (location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/[^/]+$/,'')) + 'sw.js';
-      navigator.serviceWorker.register(swPath);
-    }catch(e){}
+  /* SW removed in debug build */catch(e){}
   }
 
   const $ = (s) => document.querySelector(s);
   const canvas = $('#canvas');
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d'); __spiralLog('Canvas context: ' + (ctx ? 'ok' : 'null'));
 
   // Controls
   const ctrl = {
@@ -111,7 +121,7 @@
   }
 
   // Recompute on parameter changes that affect geometry
-  function markDirty(){ computeGeometry(); draw(); }
+  function markDirty(){ computeGeometry(); draw(); __spiralLog('first draw done'); }
 
   ;[
     [ctrl.a, ctrl.aNum],
@@ -159,7 +169,7 @@
   });
 
   // Resize
-  function resize(){
+  function resize(){ __spiralLog('resize');
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.floor(rect.width * dpr);
@@ -310,7 +320,7 @@
     ctx.globalAlpha = 1;
   }
 
-  function draw(){
+  function draw(){ /* draw */
     const w = canvas.width / (window.devicePixelRatio || 1);
     const h = canvas.height / (window.devicePixelRatio || 1);
     ctx.clearRect(0, 0, w, h);
@@ -757,8 +767,10 @@
     computeGeometry();
   }
 
-  window.addEventListener('resize', ()=>{ resizeAndCompute(); draw(); });
+  window.addEventListener('resize', ()=>{ __spiralLog('resize+compute');
+  resizeAndCompute(); draw(); });
 
+  __spiralLog('init defaults');
   initDefaults();
   resizeAndCompute();
   draw();
