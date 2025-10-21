@@ -390,9 +390,67 @@
   // --- Recording (WebM via MediaRecorder) ---
   let mediaRecorder = null;
   let recordedChunks = [];
+  let _recPump = null;
+  let _recPrev = null;
 
   function startWebM(){
     if (!('MediaRecorder' in window)) { alert('MediaRecorder non supportato da questo browser'); return; }
+    const stream = canvas.captureStream(60); // 60 fps
+    const opts = { mimeType: 'video/webm;codecs=vp9' };
+    try{
+      mediaRecorder = new MediaRecorder(stream, opts);
+    }catch(e){
+      try{ mediaRecorder = new MediaRecorder(stream, {mimeType:'video/webm'}); }catch(err){
+        alert('Registrazione non supportata: ' + err); return;
+      }
+    }
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = (e)=>{ if (e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = ()=>{
+      const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || 'video/webm'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'archimedes_spiral.webm';
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 500);
+      ctrl.btnStopRecord.disabled = true;
+      ctrl.btnRecordWebM.disabled = false;
+      // restore previous speeds if we changed them
+      if (_recPrev && _recPrev.changed3D){
+        ctrl.rxSpeed.value = ctrl.rxSpeedNum.value = _recPrev.rx;
+        ctrl.rySpeed.value = ctrl.rySpeedNum.value = _recPrev.ry;
+        ctrl.rzSpeed.value = ctrl.rzSpeedNum.value = _recPrev.rz;
+      }
+      if (_recPump){ clearInterval(_recPump); _recPump = null; }
+      _recPrev = null;
+    };
+    mediaRecorder.start();
+    ctrl.btnStopRecord.disabled = false;
+    ctrl.btnRecordWebM.disabled = true;
+
+    // ensure animation is running
+    const wasAnimating = ctrl.animate.checked;
+    if (!wasAnimating){ ctrl.animate.checked = true; last = performance.now(); if(!animId) animId = requestAnimationFrame(tick); }
+
+    // if in 3D and all speeds are ~0, set a default Y spin so video non è statico
+    _recPrev = { rx: parseFloat(ctrl.rxSpeed.value)||0, ry: parseFloat(ctrl.rySpeed.value)||0, rz: parseFloat(ctrl.rzSpeed.value)||0, changed3D: false };
+    if (ctrl.mode3d.checked){
+      const isStill = Math.abs(_recPrev.rx) < 0.1 && Math.abs(_recPrev.ry) < 0.1 && Math.abs(_recPrev.rz) < 0.1;
+      if (isStill){
+        ctrl.rySpeed.value = ctrl.rySpeedNum.value = 18;
+        _recPrev.changed3D = true;
+      }
+    }
+
+    // fallback pump: some browsers throttle rAF during recording/inactive tabs
+    if (_recPump){ clearInterval(_recPump); }
+    _recPump = setInterval(()=>{
+      if (!animId){
+        last = performance.now();
+        animId = requestAnimationFrame(tick);
+      }
+    }, 1000/30);
+  }
     const stream = canvas.captureStream(60); // 60 fps
     const opts = { mimeType: 'video/webm;codecs=vp9' };
     try{
@@ -422,7 +480,7 @@
   }
 
   function stopWebM(){
-    mediaRecorder?.stop();
+    try{ mediaRecorder?.stop(); }catch(_){}
   }
 
   ctrl.btnRecordWebM?.addEventListener('click', startWebM);
