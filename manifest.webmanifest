@@ -1,9 +1,7 @@
 {
-  "name": "Archimedes Spiral — PWA (Offline)",
-  "short_name": "Spiral PWA",
-  "id": "/archimedes_spiral/",
-  "start_url": "/archimedes_spiral/",
-  "scope": "/archimedes_spiral/",
+  "name": "Archimedes Spiral — PWA Core (Qualità)",
+  "short_name": "Spiral Core",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#0b1022",
   "theme_color": "#0b1022",
