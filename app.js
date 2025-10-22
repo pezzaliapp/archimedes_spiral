@@ -10,11 +10,12 @@
         quality = $('quality'), btnAutoQuality = $('btnAutoQuality'),
         gradientMode = $('gradientMode');
 
-  // (opzionali, se presenti nell'HTML compaiono i controlli di registrazione)
+  // Registrazione (opzionali: se sono in index.html)
   const recSecs = $('recSecs');
   const btnRecWebM = $('btnRecWebM');
   const btnStopRec = $('btnStopRec');
   const btnFrames = $('btnFrames');
+  const recBanner = $('recBanner');
 
   const only3d = Array.from(document.querySelectorAll('.only3d'));
 
@@ -80,7 +81,7 @@
         for(let i=0;i<N;i++){
           const p = P2[i];
           let tcol = col;
-          if (grad==='radius' || grad==='depth'){ // depth in 2D ≈ radius
+          if (grad==='radius' || grad==='depth'){ // depth in 2D ~ radius
             const tt = Math.hypot(p.x,p.y)/maxR; const c = mixTowardLight(base, Math.min(1, tt*0.9)); tcol = rgbToCss(c.r,c.g,c.b,1);
           } else if (grad==='angle'){
             const tt = i/Math.max(1,N-1); const c = mixTowardLight(base, tt*0.9); tcol = rgbToCss(c.r,c.g,c.b,1);
@@ -89,7 +90,6 @@
           ctx.fillRect(p.x,p.y,ctx.lineWidth,ctx.lineWidth);
         }
       } else {
-        // linea a segmenti colorati
         if (N>0){
           ctx.beginPath(); ctx.moveTo(P2[0].x, P2[0].y);
           for(let i=1;i<N;i++){
@@ -173,8 +173,13 @@
   }
   btnAutoQuality.addEventListener('click', autoQuality);
 
-  // ===== Export Animato (opzionale: funzionerà solo se i pulsanti esistono in pagina) =====
+  // ===== Export Animato + Banner =====
   let mediaRecorder = null, recordedChunks = [], pump = null;
+
+  function showRecBanner(on){
+    if (!recBanner) return;
+    recBanner.style.display = on ? 'flex' : 'none';
+  }
 
   function startRecWebM(){
     if (!('MediaRecorder' in window)) { alert('MediaRecorder non supportato'); return; }
@@ -194,10 +199,12 @@
       if (btnStopRec) btnStopRec.disabled = true;
       if (btnRecWebM) btnRecWebM.disabled = false;
       if (pump) { clearInterval(pump); pump = null; }
+      showRecBanner(false);
     };
     mediaRecorder.start();
     if (btnRecWebM) btnRecWebM.disabled = true;
     if (btnStopRec) btnStopRec.disabled = false;
+    showRecBanner(true);
 
     const wasAnimating = animate.checked;
     if (!wasAnimating){ animate.checked = true; startTime = performance.now(); requestAnimationFrame(tick); }
@@ -206,7 +213,7 @@
 
     setTimeout(()=>{ try{ mediaRecorder.stop(); }catch(_){ } }, secs*1000);
   }
-  function stopRecWebM(){ try{ mediaRecorder?.stop(); }catch(_){ } }
+  function stopRecWebM(){ try{ mediaRecorder?.stop(); }catch(_){ showRecBanner(false); } }
 
   async function saveFramesPNG(){
     const secs = Math.max(1, Math.min(10, parseInt((recSecs && recSecs.value) || '5',10)));
@@ -223,7 +230,6 @@
     if (!prev){ animate.checked = false; draw(0); }
   }
 
-  // Bind solo se i pulsanti esistono
   if (btnRecWebM) btnRecWebM.addEventListener('click', startRecWebM);
   if (btnStopRec) btnStopRec.addEventListener('click', stopRecWebM);
   if (btnFrames)  btnFrames.addEventListener('click', saveFramesPNG);
